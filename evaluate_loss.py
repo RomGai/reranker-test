@@ -69,7 +69,14 @@ def evaluate_loss(config: Dict) -> float:
         device_map="auto",
         trust_remote_code=trust_remote_code,
     )
+    base_param_count = sum(p.numel() for p in model.parameters())
+    logging.info(f"Base model parameter count (before merging LoRA): {base_param_count:,}")
+
     model = PeftModel.from_pretrained(model, adapter_dir)
+    lora_state_dict = model.get_peft_model_state_dict()
+    lora_param_count = sum(t.numel() for t in lora_state_dict.values())
+    logging.info(f"LoRA adapter parameter count: {lora_param_count:,}")
+
     model = model.merge_and_unload()
     processor = AutoProcessor.from_pretrained(base_model_name)
 
