@@ -5,8 +5,9 @@ from typing import Dict, List
 
 import torch
 from torch.utils.data import Dataset, DataLoader
-from transformers import Qwen2_5_VLForConditionalGeneration, Qwen2_5_VLProcessor
+from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration
 
+from peft import PeftModel
 from qwen_vl_utils import process_vision_info
 
 
@@ -24,7 +25,7 @@ class MMDataset(Dataset):
         return self.data[int(idx)]
 
 
-def build_collate_fn(processor: Qwen2_5_VLProcessor):
+def build_collate_fn(processor: AutoProcessor):
     def collate_fn(examples: List[Dict]) -> Dict:
         texts: List[str] = []
         images: List[List] = []
@@ -56,16 +57,20 @@ def evaluate_loss(config: Dict) -> float:
         raw_data = json.load(f)
 
     dataset = MMDataset(raw_data)
-    model_path = config["training"].get("output_dir", config["models"].get("student"))
+    base_model_name = config.get("models", {}).get("student", "Qwen/Qwen2.5-VL-3B-Instruct")
+    adapter_dir = config.get("training", {}).get("output_dir", "./result")
+    trust_remote_code = config.get("inference", {}).get("trust_remote_code", True)
 
-    logging.info(f"Loading trained reranker from {model_path}")
+    logging.info(f"Loading base model {base_model_name} and merging LoRA from {adapter_dir}")
     model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
-        model_path,
+        base_model_name,
         torch_dtype="auto",
         device_map="auto",
-        trust_remote_code=True,
+        trust_remote_code=trust_remote_code,
     )
-    processor = Qwen2_5_VLProcessor.from_pretrained(model_path)
+    model = PeftModel.from_pretrained(model, adapter_dir)
+    model = model.merge_and_unload()
+    processor = AutoProcessor.from_pretrained(base_model_name)
 
     model.eval()
 
