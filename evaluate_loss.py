@@ -9,6 +9,7 @@ from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration
 
 from peft import PeftModel
 from qwen_vl_utils import process_vision_info
+from tqdm.auto import tqdm
 
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -80,7 +81,7 @@ def evaluate_loss(config: Dict) -> float:
     total_loss = 0.0
     total_examples = 0
 
-    for batch in dataloader:
+    for batch in tqdm(dataloader, desc="Evaluating labeled set"):
         batch = {k: v.to(model.device) if torch.is_tensor(v) else v for k, v in batch.items()}
         with torch.no_grad():
             outputs = model(**batch)
